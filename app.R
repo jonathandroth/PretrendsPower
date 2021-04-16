@@ -44,7 +44,22 @@ ui <- fluidPage(
         # Show a plot of the generated distribution
         mainPanel(
            plotOutput("distPlot"),
-           
+           h1("Instructions"),
+           p("This app enables power calculations for pre-trends tests for event-study designs. It also allows for evaluation of the distortions from pre-testing."),
+           p(HTML("See <a href = https://jonathandroth.github.io/assets/files/roth_pretrends_testing.pdf>Pre-test with Caution: Event-Study Estimates After Testing for Parallel Trends (Roth, 2020)</a> for more details.")),
+           h2("Inputs"),
+           p("The user inputs 3 csv files containing:"),
+           p(HTML("<b> Event Study Coefficients: </b> A CSV file with a column <i> beta </i> with the coefficients, and a column <i> t </i> with the event-time, where 0 corresponds with the first treated period and -1 is normalized to 0 (the coefficient for -1 can be omitted). <a href=https://github.com/jonathandroth/PretrendsPower/blob/master/example_beta.csv>Example</a>")),
+           p(HTML("<b> Covariance matrix: </b> A CSV file with the variance-covariance matrix for the event-plot. <a href=https://github.com/jonathandroth/PretrendsPower/blob/master/example_sigma.csv>Example</a>")),
+           p(HTML("<b> Hypothesized Trend: </b> A CSV file containing the hypothesized counterfactual trend in the column <i> beta_true </i>.  <a href=https://github.com/jonathandroth/PretrendsPower/blob/master/example_beta_true.csv>Example</a>")),
+           p(HTML("The event-study estimates can come from any asymptotically normal estimator, including two-way fixed effects models, or the estimators of Callaway & Sant'Anna (2020), Sun & Abraham (2020), or Freyaldenhoven et al (2019).")),
+           p("There is also a check-box:"),
+           p(HTML("<b> Show Mean After Pre-Testing: </b> If this checkbox is clicked, then the mean event-study coefficient conditional on passing the pre-test are displayed.")),
+           h2("Outputs"),
+           p(HTML("<b> Power: </b> the probability that no significant pre-period coefficient would be detected under the hypothesized trend.")),
+           p(HTML("<b> Bayes Factor: </b> the relative probability that no significant pre-period coefficient would be detected under the hypothesized trend relative to under parallel trends.")),
+           p(HTML("<b> Likelihood Ratio: </b> the relative likelihood of the estimated coefficients under the hypothesized trend relative to under parallel trends.")),
+           p(HTML("<b> An Event Plot: </b> displays the estimated coefficients and SEs, the hypothesized true trend. If <i> Show Mean After Pre-testing </i> is checked, it also displays the expected value of the coefficients conditional on not finding a significant pre-treatment coefficient under the hypothesized trend."))
         )
     )
 )
@@ -237,12 +252,10 @@ server <- function(input, output) {
     output$distPlot <- renderPlot({
 
         # draw the histogram with the specified number of bins
-        ggplot2::ggplot(data = make_data_for_plots_and_tables()$df_eventplot, aes(x = t, y = betahat, ymin = betahat - 1.96* se, ymax = betahat + 1.96*se)) +
+        p<- ggplot2::ggplot(data = make_data_for_plots_and_tables()$df_eventplot, aes(x = t, y = betahat, ymin = betahat - 1.96* se, ymax = betahat + 1.96*se)) +
             geom_point(aes(color = "Estimated Coefs", shape = "Estimated Coefs")) + geom_pointrange() +
             geom_point(aes(y=beta_true, color = "Hypothesized Trend", shape = "Hypothesized Trend"), size = 2.5) +
             geom_line(aes(y=beta_true, color = "Hypothesized Trend")) +
-            geom_point(aes(y=meanAfterPretesting, color = "Expectation After Pre-testing", shape = "Expectation After Pre-testing"), size = 2.5) +
-            geom_line(aes(y=meanAfterPretesting, color = "Expectation After Pre-testing"), linetype = "dashed") +
             scale_color_manual(values = c("black", "red", "blue"), 
                                breaks = c("Estimated Coefs", "Hypothesized Trend", "Expectation After Pre-testing"), 
                                name = "") +
@@ -251,6 +264,14 @@ server <- function(input, output) {
                                name = "") +
             xlab("Relative Time") + ylab("") +
             ggtitle("Event Plot and Hypothesized Trends")
+        
+        
+        if(input$showMeanAfterPretest){
+            p <- p + 
+                 geom_point(aes(y=meanAfterPretesting, color = "Expectation After Pre-testing", shape = "Expectation After Pre-testing"), size = 2.5) +
+                 geom_line(aes(y=meanAfterPretesting, color = "Expectation After Pre-testing"), linetype = "dashed")
+        }
+        p
     })
 
 
