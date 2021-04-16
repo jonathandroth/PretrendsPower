@@ -19,15 +19,21 @@ ui <- fluidPage(
     
     fileInput(inputId = "betahat",
               label = "Upload a csv file containing event-study estimates (with columns t and beta).",
-              accept = c(".csv")),
+              accept = c(".csv"),
+              width = 600),
     
     fileInput(inputId = "sigma",
               label = "Upload a csv file with the event-study covariance matrix",
-              accept = c(".csv")),
+              accept = c(".csv"),
+              width = 600),
     
     fileInput(inputId = "betatrue",
               label = "Upload a csv file with the hypothesized difference in trends (with column beta_true)",
-              accept = c(".csv")),
+              accept = c(".csv"),
+              width = 600),
+    
+    checkboxInput(inputId = "showMeanAfterPretest", label = "Show Mean After Pre-Testing", value = FALSE, width = NULL),
+    
 
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
@@ -92,6 +98,11 @@ server <- function(input, output) {
         #Load the betahat and sigma
         df <- get_betahat_df()
         sigma <- get_sigma()
+
+        #Remove column/row names for sigma, sicne this yields problems with mtvmnorm
+        colnames(sigma) <- NULL
+        rownames(sigma) <- NULL
+        #sigma <- 0.5*(sigma + t(sigma)) #to avoid numerical precision issues, make sigma symmetric by construction
         
         if(is.null(df$t) | is.null(df$betahat)){stop("The csv with the event-studies must have columns t and betahat.")}
         if(nrow(df) != NROW(sigma)){stop("The dimension of the uploaded covariance matrix must correspond with the number of event-study coefficients. Did you upload a covariance matrix?")}
@@ -125,8 +136,67 @@ server <- function(input, output) {
                 return(power)
             }
         
+        #Function for computing the mean of betaPre after pre-testing
+        meanBetaPre_NIS <- 
+            function(betaPre, sigmaPre, thresholdTstat.Pretest = 1.96){
+                require(tmvtnorm)
+                
+                ub <- sqrt( diag( as.matrix(sigmaPre) ) ) * thresholdTstat.Pretest
+                lb <- -ub
+                
+                meanBetaPre <- tmvtnorm::mtmvnorm(mean = betaPre, sigma = sigmaPre,
+                                                  lower = lb, upper = ub,
+                                                  doComputeVariance = F)$tmean
+                
+                return(meanBetaPre)
+            }
+        #Function for computing the mean of betapost after pre-testing
+        meanBetaPost_NIS <- function(beta, 
+                                     sigma,
+                                     prePeriodIndices = 1:(dim(as.matrix(sigma))[1] -1),
+                                     postPeriodIndices = dim(as.matrix(sigma))[1],
+                                     tVec = c( seq(-dim(as.matrix(sigma))[1] -1, -1), 1),
+                                     referencePeriod = 0,
+                                     thresholdTstat.Pretest = 1.96,
+                                     eta = NULL,
+                                     ...){
+            
+            betaPre <- beta[prePeriodIndices]
+            sigmaPre <- sigma[prePeriodIndices, prePeriodIndices]
+            
+            betaPost <- beta[postPeriodIndices]
+            tVecPost <- tVec[postPeriodIndices]
+            
+            sigma12 <- sigma[postPeriodIndices, prePeriodIndices]
+            
+            meanBetaPost <- betaPost + sigma12 %*% solve(sigmaPre) %*% 
+                (meanBetaPre_NIS(betaPre = betaPre,
+                                 sigmaPre = sigmaPre,
+                                 thresholdTstat.Pretest = thresholdTstat.Pretest) -
+                     betaPre)
+            
+            if(is.null(eta)){
+                relativeT <- tVecPost - referencePeriod
+                
+                df <- data.frame(betaPostConditional = meanBetaPost,
+                                 betaPostUnconditional = betaPost,
+                                 relativeT = relativeT)
+            }else{
+                etaPost <- eta[postPeriodIndices]
+                gammaPostConditional <- t(etaPost) %*% meanBetaPost
+                gammaPostUnconditional <- t(etaPost) %*% betaPost
+                
+                df <- data.frame(betaPostConditional = gammaPostConditional,
+                                 betaPostUnconditional = gammaPostUnconditional,
+                                 relativeT = 1)
+            }
+            return(df)
+        }
+        
+        
         #Extract the objets corresponding with the pre-period
         prePeriodIndices <- which(df$t < -1)
+        postPeriodIndices <- which(df$t > -1)
         betaPreActual <- df$betahat[prePeriodIndices]
         betaPreAlt <- beta_true[prePeriodIndices]
         sigmaPre <- sigma[prePeriodIndices, prePeriodIndices]
@@ -139,11 +209,24 @@ server <- function(input, output) {
         likelihood_betatrue <- dmvnorm(x = betaPreActual, mean = betaPreAlt, sigma = sigmaPre)
         likelihood_0 <- dmvnorm(x = betaPreActual, mean = 0*betaPreAlt, sigma = sigmaPre)
         
+        #Compute the means after pre-testing
+        meanBetaPre <- meanBetaPre_NIS(betaPre = betaPreAlt,sigmaPre = sigmaPre)
+        meanBetaPost <- meanBetaPost_NIS(beta = beta_true, 
+                                         sigma = sigma, 
+                                         prePeriodIndices = prePeriodIndices,
+                                         postPeriodIndices = postPeriodIndices,
+                                         tVec = df$t)$betaPostConditional
+        
+        meanAfterPretesting_df <- data.frame(t= c(df$t[prePeriodIndices], df$t[postPeriodIndices], -1),
+                                             meanAfterPretesting = c(meanBetaPre, meanBetaPost, 0 ))
+        
+        df <- dplyr::left_join(df, meanAfterPretesting_df, by = c("t"))
         #Create a data frame displaying the power, BF, and LR
         df_power <- 
             data.frame(Power = power_against_betatrue, 
                        `Bayes Factor` = power_against_betatrue / power_against_0,
                         `Likelihood Ratio` = likelihood_betatrue / likelihood_0 ) 
+        
         
         #Return the dataframes in a list
         return(list(df_eventplot = df, df_power = df_power))
@@ -155,10 +238,17 @@ server <- function(input, output) {
 
         # draw the histogram with the specified number of bins
         ggplot2::ggplot(data = make_data_for_plots_and_tables()$df_eventplot, aes(x = t, y = betahat, ymin = betahat - 1.96* se, ymax = betahat + 1.96*se)) +
-            geom_point(aes(color = "Estimated Coefs")) + geom_pointrange() +
-            geom_point(aes(y=beta_true, color = "Hypothesized Trend"), size = 2.5) +
+            geom_point(aes(color = "Estimated Coefs", shape = "Estimated Coefs")) + geom_pointrange() +
+            geom_point(aes(y=beta_true, color = "Hypothesized Trend", shape = "Hypothesized Trend"), size = 2.5) +
             geom_line(aes(y=beta_true, color = "Hypothesized Trend")) +
-            scale_color_manual(values = c("black", "red"), name = "") +
+            geom_point(aes(y=meanAfterPretesting, color = "Expectation After Pre-testing", shape = "Expectation After Pre-testing"), size = 2.5) +
+            geom_line(aes(y=meanAfterPretesting, color = "Expectation After Pre-testing"), linetype = "dashed") +
+            scale_color_manual(values = c("black", "red", "blue"), 
+                               breaks = c("Estimated Coefs", "Hypothesized Trend", "Expectation After Pre-testing"), 
+                               name = "") +
+             scale_shape_discrete(#values = c(1,2,3),
+                                breaks = c("Estimated Coefs", "Hypothesized Trend", "Expectation After Pre-testing"), 
+                               name = "") +
             xlab("Relative Time") + ylab("") +
             ggtitle("Event Plot and Hypothesized Trends")
     })
