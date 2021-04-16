@@ -54,7 +54,7 @@ ui <- fluidPage(
            p(HTML("<b> Hypothesized Trend: </b> A CSV file containing the hypothesized counterfactual trend in the column <i> beta_true </i>.  <a href=https://github.com/jonathandroth/PretrendsPower/blob/master/example_beta_true.csv>Example</a>")),
            p(HTML("The event-study estimates can come from any asymptotically normal estimator, including two-way fixed effects models, or the estimators of Callaway & Sant'Anna (2020), Sun & Abraham (2020), or Freyaldenhoven et al (2019).")),
            p("There is also a check-box:"),
-           p(HTML("<b> Show Mean After Pre-Testing: </b> If this checkbox is clicked, then the mean event-study coefficient conditional on passing the pre-test are displayed.")),
+           p(HTML("<b> Show Mean After Pre-Testing: </b> If this checkbox is clicked, then the mean event-study coefficients conditional on passing the pre-test are displayed.")),
            h2("Outputs"),
            p(HTML("<b> Power: </b> the probability that no significant pre-period coefficient would be detected under the hypothesized trend.")),
            p(HTML("<b> Bayes Factor: </b> the relative probability that no significant pre-period coefficient would be detected under the hypothesized trend relative to under parallel trends.")),
