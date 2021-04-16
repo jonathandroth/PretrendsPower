@@ -15,8 +15,10 @@ documentation.
 
 ## Loading the app
 
-The application can be run in [RStudio](https://www.rstudio.com/) with
-the following commands
+There are two ways to use the Shiny app.
+
+First, the application can be run locally in
+[RStudio](https://www.rstudio.com/) with the following commands
 
 ``` r
 #install.packages("shiny") #install Shiny if not installed
@@ -24,7 +26,14 @@ library(shiny)
 shiny::runGitHub("PretrendsPower", "jonathandroth")
 ```
 
-Below is a screenshot of the user-interfact of the app, which also
+Second, there is an [online version of the
+app](https://jonathandroth.shinyapps.io/pretrendspowerapp/).
+Unfortunately, the free version of shinyapps limits total usage to 25
+hours a month.
+
+## Screenshot
+
+Below is a screenshot of the user-interface of the app, which also
 provides detailed use instructions.
 
 ![Shiny app mockup.](Shiny-Mockup.png)
