@@ -10,7 +10,8 @@
 library(shiny)
 library(DT)
 library(ggplot2)
-
+library(tmvtnorm)
+library(mvtnorm)
 # Define UI for application that draws a histogram
 ui <- fluidPage(
 
