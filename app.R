@@ -59,7 +59,7 @@ ui <- fluidPage(
            p(HTML("<b> Power: </b> the probability that no significant pre-period coefficient would be detected under the hypothesized trend.")),
            p(HTML("<b> Bayes Factor: </b> the relative probability that no significant pre-period coefficient would be detected under the hypothesized trend relative to under parallel trends.")),
            p(HTML("<b> Likelihood Ratio: </b> the relative likelihood of the estimated coefficients under the hypothesized trend relative to under parallel trends.")),
-           p(HTML("<b> An Event Plot: </b> displays the estimated coefficients and SEs, the hypothesized true trend. If <i> Show Mean After Pre-testing </i> is checked, it also displays the expected value of the coefficients conditional on not finding a significant pre-treatment coefficient under the hypothesized trend."))
+           p(HTML("<b> An Event Plot: </b> displays the estimated coefficients and SEs, and the hypothesized true trend. If <i> Show Mean After Pre-testing </i> is checked, it also displays the expected value of the coefficients conditional on not finding a significant pre-treatment coefficient under the hypothesized trend."))
         )
     )
 )
