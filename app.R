@@ -221,8 +221,8 @@ server <- function(input, output) {
         power_against_0 <- rejectionProbability_NIS(betaPre = 0*betaPreAlt, SigmaPre = sigmaPre)    
         
         #COmpute likelihoods under beta=betaPreAlt and beta=0
-        likelihood_betatrue <- dmvnorm(x = betaPreActual, mean = betaPreAlt, sigma = sigmaPre)
-        likelihood_0 <- dmvnorm(x = betaPreActual, mean = 0*betaPreAlt, sigma = sigmaPre)
+        likelihood_betatrue <- mvtnorm::dmvnorm(x = betaPreActual, mean = betaPreAlt, sigma = sigmaPre)
+        likelihood_0 <- mvtnorm::dmvnorm(x = betaPreActual, mean = 0*betaPreAlt, sigma = sigmaPre)
         
         #Compute the means after pre-testing
         meanBetaPre <- meanBetaPre_NIS(betaPre = betaPreAlt,sigmaPre = sigmaPre)
@@ -239,7 +239,7 @@ server <- function(input, output) {
         #Create a data frame displaying the power, BF, and LR
         df_power <- 
             data.frame(Power = power_against_betatrue, 
-                       `Bayes Factor` = power_against_betatrue / power_against_0,
+                       `Bayes Factor` = (1-power_against_betatrue) / (1-power_against_0),
                         `Likelihood Ratio` = likelihood_betatrue / likelihood_0 ) 
         
         
