@@ -18,11 +18,15 @@ ui <- fluidPage(
     titlePanel("Power Analysis for Pre-trends Tests"),
     
     fileInput(inputId = "betahat",
-              label = "Upload event-study estimates in csv form",
+              label = "Upload a csv file containing event-study estimates (with columns t and beta).",
               accept = c(".csv")),
     
     fileInput(inputId = "sigma",
-              label = "Upload event-study covariance matrix in csv form",
+              label = "Upload a csv file with the event-study covariance matrix",
+              accept = c(".csv")),
+    
+    fileInput(inputId = "betatrue",
+              label = "Upload a csv file with the hypothesized difference in trends (with column beta_true)",
               accept = c(".csv")),
 
     # Sidebar with a slider input for number of bins 
@@ -53,6 +57,8 @@ server <- function(input, output) {
     
     #df <- read.csv("example_beta.csv")
     
+    
+    ## This function loads the user-inputted betahat if given, otherwise the default betahat_df
     get_betahat_df <- reactive(
         if(is.null(input$betahat)){
             read.csv("example_beta.csv")
@@ -61,6 +67,16 @@ server <- function(input, output) {
         }
     )
     
+    
+    get_betatrue <- reactive(
+        if(is.null(input$betatrue)){
+            read.csv("example_beta_true.csv")$beta_true
+        }else{
+            read.csv(input$betatrue$datapath)$beta_true
+        }
+    )
+    
+    ## This function loads the user-inputted sigma if given, otherwise the default sigma
     get_sigma <- reactive(
         if(is.null(input$sigma)){
             as.matrix(read.csv("example_sigma.csv"))
@@ -69,15 +85,26 @@ server <- function(input, output) {
         }
     )
 
-    
-    #output$table <- renderDT(betahat_df)
-    output$distPlot <- renderPlot({
+
+    ##This function creates the dfs used to display the event-study plot and power resutls
+    make_data_for_plots_and_tables <- function(){
+        
+        #Load the betahat and sigma
         df <- get_betahat_df()
         sigma <- get_sigma()
+        
+        if(is.null(df$t) | is.null(df$betahat)){stop("The csv with the event-studies must have columns t and betahat.")}
+        if(nrow(df) != NROW(sigma)){stop("The dimension of the uploaded covariance matrix must correspond with the number of event-study coefficients. Did you upload a covariance matrix?")}
+        
         df$se <- sqrt(diag(sigma))
         
-        beta_alt <- 0.05*(df$t+1)
+        #beta_true <- 0.05*(df$t+1)
+        beta_true <- get_betatrue()
+        if(is.null(beta_true)){stop("The csv with they hypothesized difference in trends must have column beta_true")}
+        if(nrow(df) != length(beta_true)){stop("The dimension of the hypothesized difference in trends must correspond with the number of event-study coefficients. Did you upload a beta_true?")}
+        df$beta_true <- beta_true 
         
+        #Function for computing the power of the non-individually significant pre-test
         rejectionProbability_NIS <- 
             function(betaPre, SigmaPre, thresholdTstat.Pretest = 1.96){
                 require(mvtnorm)
@@ -98,29 +125,45 @@ server <- function(input, output) {
                 return(power)
             }
         
+        #Extract the objets corresponding with the pre-period
         prePeriodIndices <- which(df$t < -1)
         betaPreActual <- df$betahat[prePeriodIndices]
-        betaPreAlt <- beta_alt[prePeriodIndices]
+        betaPreAlt <- beta_true[prePeriodIndices]
         sigmaPre <- sigma[prePeriodIndices, prePeriodIndices]
         
-        power_against_betaalt <- rejectionProbability_NIS(betaPre = betaPreAlt, SigmaPre = sigmaPre)
+        #Compute power against the alt trend and power against 0 (i.e. size of test)
+        power_against_betatrue <- rejectionProbability_NIS(betaPre = betaPreAlt, SigmaPre = sigmaPre)
         power_against_0 <- rejectionProbability_NIS(betaPre = 0*betaPreAlt, SigmaPre = sigmaPre)    
         
-        
-        likelihood_betaalt <- dmvnorm(x = betaPreActual, mean = betaPreAlt, sigma = sigmaPre)
+        #COmpute likelihoods under beta=betaPreAlt and beta=0
+        likelihood_betatrue <- dmvnorm(x = betaPreActual, mean = betaPreAlt, sigma = sigmaPre)
         likelihood_0 <- dmvnorm(x = betaPreActual, mean = 0*betaPreAlt, sigma = sigmaPre)
-        # draw the histogram with the specified number of bins
-        ggplot2::ggplot(data = df, aes(x = t, y = betahat, ymin = betahat - 1.96* se, ymax = betahat + 1.96*se)) + 
-            geom_point(aes(color = "Estimated Coefs")) + geom_pointrange() +
-            geom_point(aes(y=beta_alt, color = "Hypothesized Trend"), size = 2.5) +
-            geom_line(aes(y=beta_alt, color = "Hypothesized Trend")) + 
-            scale_color_manual(values = c("black", "red"), name = "")
-    })
+        
+        #Create a data frame displaying the power, BF, and LR
+        df_power <- 
+            data.frame(Power = power_against_betatrue, 
+                       `Bayes Factor` = power_against_betatrue / power_against_0,
+                        `Likelihood Ratio` = likelihood_betatrue / likelihood_0 ) 
+        
+        #Return the dataframes in a list
+        return(list(df_eventplot = df, df_power = df_power))
+    }
     
-    # output$table <- renderTable(data.frame(Power = power_against_betaalt, 
-    #                                        `Bayes Factor` = power_against_betaalt / power_against_0,
-    #                                        `Likelihood Ratio` = likelihood_betaalt / likelihood_0 )) 
-    ##Compute power against 
+    output$table <- renderTable(make_data_for_plots_and_tables()$df_power)
+
+    output$distPlot <- renderPlot({
+
+        # draw the histogram with the specified number of bins
+        ggplot2::ggplot(data = make_data_for_plots_and_tables()$df_eventplot, aes(x = t, y = betahat, ymin = betahat - 1.96* se, ymax = betahat + 1.96*se)) +
+            geom_point(aes(color = "Estimated Coefs")) + geom_pointrange() +
+            geom_point(aes(y=beta_true, color = "Hypothesized Trend"), size = 2.5) +
+            geom_line(aes(y=beta_true, color = "Hypothesized Trend")) +
+            scale_color_manual(values = c("black", "red"), name = "") +
+            xlab("Relative Time") + ylab("") +
+            ggtitle("Event Plot and Hypothesized Trends")
+    })
+
+
 }
 
 # Run the application 
