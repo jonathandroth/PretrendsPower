@@ -120,15 +120,17 @@ server <- function(input, output) {
         rownames(sigma) <- NULL
         #sigma <- 0.5*(sigma + t(sigma)) #to avoid numerical precision issues, make sigma symmetric by construction
         
-        if(is.null(df$t) | is.null(df$betahat)){stop("The csv with the event-studies must have columns t and betahat.")}
-        if(nrow(df) != NROW(sigma)){stop("The dimension of the uploaded covariance matrix must correspond with the number of event-study coefficients. Did you upload a covariance matrix?")}
+        validate( need(!is.null(df$t) & !is.null(df$betahat), "The csv with the event-studies should have columns t and betahat." ) )
+
+        validate( need(nrow(df) == NROW(sigma), "Please upload a covariance matrix with the same dimensions as the uploaded event-study coefficients" ) )
+      
         
         df$se <- sqrt(diag(sigma))
-        
-        #beta_true <- 0.05*(df$t+1)
+      
         beta_true <- get_betatrue()
-        if(is.null(beta_true)){stop("The csv with they hypothesized difference in trends must have column beta_true")}
-        if(nrow(df) != length(beta_true)){stop("The dimension of the hypothesized difference in trends must correspond with the number of event-study coefficients. Did you upload a beta_true?")}
+        validate(need(!is.null(beta_true), "The csv with they hypothesized difference in trends should have column beta_true"))
+        validate(need(nrow(df) == length(beta_true), "Please upload a hypothesized difference in trends with the same dimension as the uploaded event-study coefficients") )
+        #if(nrow(df) != length(beta_true)){stop("The dimension of the hypothesized difference in trends must correspond with the number of event-study coefficients. Did you upload a beta_true?")}
         df$beta_true <- beta_true 
         
         #Function for computing the power of the non-individually significant pre-test
